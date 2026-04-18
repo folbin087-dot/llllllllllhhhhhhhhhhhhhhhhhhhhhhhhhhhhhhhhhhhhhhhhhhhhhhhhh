@@ -128,9 +128,9 @@ async function checkIsPartner(userId: string): Promise<boolean> {
   const result = await query<{ is_partner: boolean; ref_count: string }>(
     `SELECT 
        COALESCE(is_partner, false) as is_partner,
-       (SELECT COUNT(*) FROM users WHERE referred_by = $1) as ref_count
-     FROM users WHERE id = $1`,
-    [userId]
+       (SELECT COUNT(*) FROM users WHERE referred_by = ?) as ref_count
+     FROM users WHERE id = ?`,
+    [userId, userId]
   )
   if (result.rows.length === 0) return false
   return result.rows[0].is_partner || parseInt(result.rows[0].ref_count) > 0
@@ -138,7 +138,7 @@ async function checkIsPartner(userId: string): Promise<boolean> {
 
 async function checkIsPremiumPartner(userId: string): Promise<boolean> {
   const result = await query<{ is_premium_partner: boolean }>(
-    "SELECT COALESCE(is_premium_partner, false) as is_premium_partner FROM users WHERE id = $1",
+    "SELECT COALESCE(is_premium_partner, false) as is_premium_partner FROM users WHERE id = ?",
     [userId]
   )
   return result.rows[0]?.is_premium_partner || false
@@ -149,14 +149,14 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   
   // Get total referrals
   const totalResult = await query<{ count: string }>(
-    "SELECT COUNT(*) as count FROM users WHERE referred_by = $1",
+    "SELECT COUNT(*) as count FROM users WHERE referred_by = ?",
     [userId]
   )
   
   // Get active referrals (active in last 7 days)
   const activeResult = await query<{ count: string }>(
     `SELECT COUNT(*) as count FROM users 
-     WHERE referred_by = $1 AND last_activity > datetime('now', '-7 days')`,
+     WHERE referred_by = ? AND last_activity > datetime('now', '-7 days')`,
     [userId]
   )
   
@@ -166,7 +166,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
        COALESCE(SUM(u.total_wagered), 0) as total_wagered,
        COALESCE(SUM(u.total_wagered - u.total_won), 0) as total_losses
      FROM users u 
-     WHERE u.referred_by = $1`,
+     WHERE u.referred_by = ?`,
     [userId]
   )
   
@@ -174,7 +174,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const earnedResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND status = 'paid'`,
+     WHERE partner_id = ? AND status = 'paid'`,
     [userId]
   )
   
@@ -182,7 +182,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const pendingResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND status = 'pending'`,
+     WHERE partner_id = ? AND status = 'pending'`,
     [userId]
   )
   
@@ -190,7 +190,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const weekResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND created_at > datetime('now', '-7 days')`,
+     WHERE partner_id = ? AND created_at > datetime('now', '-7 days')`,
     [userId]
   )
   
@@ -198,7 +198,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const monthResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND created_at > datetime('now', '-30 days')`,
+     WHERE partner_id = ? AND created_at > datetime('now', '-30 days')`,
     [userId]
   )
   
@@ -228,7 +228,7 @@ async function getReferredUsers(userId: string): Promise<ReferralUser[]> {
   }>(
     `SELECT id, username, first_name, created_at, total_wagered, total_won, last_activity
      FROM users 
-     WHERE referred_by = $1 
+     WHERE referred_by = ? 
      ORDER BY created_at DESC 
      LIMIT 50`,
     [userId]
@@ -261,7 +261,7 @@ async function getDailyStats(userId: string): Promise<DailyStats[]> {
        COALESCE(SUM(u.total_wagered), 0) as wagered,
        COALESCE(SUM(u.total_wagered - u.total_won), 0) as losses
      FROM users u
-     WHERE u.referred_by = $1 
+     WHERE u.referred_by = ? 
        AND u.created_at > datetime('now', '-30 days')
      GROUP BY DATE(u.created_at)
      ORDER BY date DESC`,
@@ -290,7 +290,7 @@ async function getWeeklyStats(userId: string) {
        COALESCE(SUM(u.total_wagered), 0) as wagered,
        COALESCE(SUM(u.total_wagered - u.total_won), 0) as losses
      FROM users u
-     WHERE u.referred_by = $1 
+     WHERE u.referred_by = ? 
        AND u.created_at > datetime('now', '-12 weeks')
      GROUP BY DATE(u.created_at, 'start of week')
      ORDER BY week DESC`,
@@ -314,14 +314,14 @@ async function withdrawCommission(userId: string): Promise<{ success: boolean; a
          COALESCE(SUM(u.total_wagered), 0) as total_wagered,
          COALESCE(SUM(u.total_won), 0) as total_won
        FROM users u 
-       WHERE u.referred_by = $1`,
+       WHERE u.referred_by = ?`,
       [userId]
     )
     
     const paidResult = await client.query<{ total: string }>(
       `SELECT COALESCE(SUM(amount), 0) as total 
        FROM partner_earnings 
-       WHERE partner_id = $1 AND status = 'paid'`,
+       WHERE partner_id = ? AND status = 'paid'`,
       [userId]
     )
     
@@ -338,24 +338,24 @@ async function withdrawCommission(userId: string): Promise<{ success: boolean; a
     // Record the withdrawal
     await client.query(
       `INSERT INTO partner_earnings (partner_id, amount, status, created_at)
-       VALUES ($1, $2, 'paid', NOW())`,
+       VALUES (?, ?, 'paid', datetime('now'))`,
       [userId, available]
     )
     
     // Add to user balance
     await client.query(
-      `UPDATE users SET balance = balance + $2 WHERE id = $1`,
-      [userId, available]
+      `UPDATE users SET balance = balance + ? WHERE id = ?`,
+      [available, userId]
     )
     
     // Record transaction
     await client.query(
       `INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, metadata)
-       VALUES ($1, 'referral', $2, 
-         (SELECT balance - $2 FROM users WHERE id = $1),
-         (SELECT balance FROM users WHERE id = $1),
+       VALUES (?, 'referral', ?, 
+         (SELECT balance - ? FROM users WHERE id = ?),
+         (SELECT balance FROM users WHERE id = ?),
          '{"type": "partner_withdrawal"}')`,
-      [userId, available]
+      [userId, available, available, userId, userId]
     )
     
     return { success: true, amount: available }
@@ -365,7 +365,7 @@ async function withdrawCommission(userId: string): Promise<{ success: boolean; a
 async function applyForPremiumPartner(userId: string): Promise<{ success: boolean; message: string }> {
   // Check if already applied
   const existing = await query(
-    `SELECT 1 FROM partner_applications WHERE user_id = $1 AND status = 'pending'`,
+    `SELECT 1 FROM partner_applications WHERE user_id = ? AND status = 'pending'`,
     [userId]
   )
   
@@ -374,9 +374,8 @@ async function applyForPremiumPartner(userId: string): Promise<{ success: boolea
   }
   
   await query(
-    `INSERT INTO partner_applications (user_id, status, created_at)
-     VALUES ($1, 'pending', NOW())
-     ON CONFLICT (user_id) DO UPDATE SET status = 'pending', created_at = NOW()`,
+    `INSERT OR REPLACE INTO partner_applications (user_id, status, created_at)
+     VALUES (?, 'pending', datetime('now'))`,
     [userId]
   )
   

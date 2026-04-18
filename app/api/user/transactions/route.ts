@@ -37,22 +37,22 @@ export async function GET(request: NextRequest) {
     const result = await query<Transaction>(
       `SELECT id, type, amount, game, created_at 
        FROM transactions 
-       WHERE user_id = $1 
+       WHERE user_id = ? 
        ORDER BY created_at DESC 
-       LIMIT $2 OFFSET $3`,
+       LIMIT ? OFFSET ?`,
       [user.id, limit, offset]
     )
     
     // Get total count
     const countResult = await query<{ count: string }>(
-      `SELECT COUNT(*) FROM transactions WHERE user_id = $1`,
+      `SELECT COUNT(*) as count FROM transactions WHERE user_id = ?`,
       [user.id]
     )
     
     return NextResponse.json({
       success: true,
-      transactions: result.rows,
-      total: parseInt(countResult.rows[0].count),
+      transactions: result.rows || [],
+      total: countResult.rows && countResult.rows[0] ? parseInt(String(countResult.rows[0].count)) : 0,
       limit,
       offset,
     })

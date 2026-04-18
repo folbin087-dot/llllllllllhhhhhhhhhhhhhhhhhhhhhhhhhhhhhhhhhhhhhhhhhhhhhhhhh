@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
 
-// GET all partners with their aggregated stats from partner_stats view
+// GET all partners with their aggregated stats
 export async function GET() {
   try {
     // Fetch all users who have at least 1 referral OR are marked as partners
@@ -26,18 +26,18 @@ export async function GET() {
         p.first_name,
         p.referral_code,
         COALESCE(p.is_premium_partner, false) as is_premium_partner,
-        COUNT(DISTINCT r.id)::text as total_referrals,
-        COUNT(DISTINCT CASE WHEN r.last_activity > NOW() - INTERVAL '7 days' THEN r.id END)::text as active_referrals,
-        COALESCE(SUM(r.total_wagered), 0)::text as total_referral_wagered,
-        COALESCE(SUM(r.total_wagered - r.total_won), 0)::text as total_referral_losses,
+        COUNT(DISTINCT r.id) as total_referrals,
+        SUM(CASE WHEN r.last_activity > datetime('now', '-7 days') THEN 1 ELSE 0 END) as active_referrals,
+        COALESCE(SUM(r.total_wagered), 0) as total_referral_wagered,
+        COALESCE(SUM(r.total_wagered - r.total_won), 0) as total_referral_losses,
         COALESCE((
           SELECT SUM(amount) FROM partner_earnings
           WHERE partner_id = p.id AND status = 'paid'
-        ), 0)::text as total_paid,
+        ), 0) as total_paid,
         COALESCE((
           SELECT SUM(amount) FROM partner_earnings
           WHERE partner_id = p.id AND status = 'pending'
-        ), 0)::text as pending_earnings
+        ), 0) as pending_earnings
       FROM users p
       LEFT JOIN users r ON r.referred_by = p.id
       WHERE COALESCE(p.is_partner, false) = true OR EXISTS (SELECT 1 FROM users WHERE referred_by = p.id)
@@ -91,8 +91,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Missing userId" }, { status: 400 })
       }
       await query(
-        "UPDATE users SET is_premium_partner = $2 WHERE id = $1",
-        [userId, !!isPremium]
+        "UPDATE users SET is_premium_partner = ? WHERE id = ?",
+        [!!isPremium ? 1 : 0, userId]
       )
       return NextResponse.json({
         success: true,
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       
       // Check if user exists
       const userResult = await query<{ id: string; first_name: string; is_partner: boolean }>(
-        "SELECT id, first_name, COALESCE(is_partner, false) as is_partner FROM users WHERE telegram_id = $1",
+        "SELECT id, first_name, COALESCE(is_partner, false) as is_partner FROM users WHERE telegram_id = ?",
         [telegramId]
       )
       
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       
       // Mark user as partner
       await query(
-        "UPDATE users SET is_partner = true WHERE id = $1",
+        "UPDATE users SET is_partner = 1 WHERE id = ?",
         [user.id]
       )
       
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       
       // Remove partner status
       await query(
-        "UPDATE users SET is_partner = false, is_premium_partner = false WHERE id = $1",
+        "UPDATE users SET is_partner = 0, is_premium_partner = 0 WHERE id = ?",
         [userId]
       )
       

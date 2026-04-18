@@ -148,12 +148,12 @@ export async function POST(request: NextRequest) {
       try {
         await query(
           `UPDATE users 
-           SET last_activity = NOW(), 
-               username = COALESCE($2, username),
-               first_name = COALESCE($3, first_name),
-               last_name = COALESCE($4, last_name)
-           WHERE telegram_id = $1`,
-          [telegramId, body.user.username, body.user.first_name, body.user.last_name]
+           SET last_activity = datetime('now'), 
+               username = COALESCE(?, username),
+               first_name = COALESCE(?, first_name),
+               last_name = COALESCE(?, last_name)
+           WHERE telegram_id = ?`,
+          [body.user.username, body.user.first_name, body.user.last_name, telegramId]
         )
       } catch (error) {
         console.error("Failed to update user:", error)
@@ -166,9 +166,9 @@ export async function POST(request: NextRequest) {
       const partnerResult = await query<{ is_partner: boolean; ref_count: string }>(
         `SELECT 
            COALESCE(is_partner, false) as is_partner,
-           (SELECT COUNT(*) FROM users WHERE referred_by = $1) as ref_count
-         FROM users WHERE id = $1`,
-        [user.id]
+           (SELECT COUNT(*) FROM users WHERE referred_by = ?) as ref_count
+         FROM users WHERE id = ?`,
+        [user.id, user.id]
       )
       if (partnerResult.rows.length > 0) {
         isPartner = partnerResult.rows[0].is_partner || parseInt(partnerResult.rows[0].ref_count) > 0
@@ -233,9 +233,9 @@ export async function GET(request: NextRequest) {
       const partnerResult = await query<{ is_partner: boolean; ref_count: string }>(
         `SELECT 
            COALESCE(is_partner, false) as is_partner,
-           (SELECT COUNT(*) FROM users WHERE referred_by = $1) as ref_count
-         FROM users WHERE id = $1`,
-        [user.id]
+           (SELECT COUNT(*) FROM users WHERE referred_by = ?) as ref_count
+         FROM users WHERE id = ?`,
+        [user.id, user.id]
       )
       if (partnerResult.rows.length > 0) {
         isPartner = partnerResult.rows[0].is_partner || parseInt(partnerResult.rows[0].ref_count) > 0

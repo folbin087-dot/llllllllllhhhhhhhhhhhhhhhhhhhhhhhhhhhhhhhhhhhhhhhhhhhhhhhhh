@@ -53,8 +53,7 @@ export async function POST(request: NextRequest) {
     try {
       await query(
         `INSERT INTO ton_payments (id, user_id, telegram_id, ton_amount, rub_amount, memo, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-         ON CONFLICT (id) DO NOTHING`,
+         VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
         [paymentId, user.id, telegramId, tonAmount, rubAmount, memo]
       )
     } catch (error) {
@@ -97,7 +96,7 @@ export async function GET(request: NextRequest) {
     // Check specific payment in database
     try {
       const result = await query<PendingPayment>(
-        "SELECT * FROM ton_payments WHERE id = $1",
+        "SELECT * FROM ton_payments WHERE id = ?",
         [paymentId]
       )
       
@@ -114,7 +113,7 @@ export async function GET(request: NextRequest) {
       const createdAt = new Date(payment.created_at).getTime()
       if (Date.now() - createdAt > 30 * 60 * 1000 && payment.status === "pending") {
         await query(
-          "UPDATE ton_payments SET status = 'expired' WHERE id = $1",
+          "UPDATE ton_payments SET status = 'expired' WHERE id = ?",
           [paymentId]
         )
         payment.status = "expired"
@@ -143,7 +142,7 @@ export async function GET(request: NextRequest) {
     try {
       const result = await query<PendingPayment>(
         `SELECT * FROM ton_payments 
-         WHERE telegram_id = $1 
+         WHERE telegram_id = ? 
          ORDER BY created_at DESC 
          LIMIT 50`,
         [telegramId]
@@ -188,7 +187,7 @@ export async function PUT(request: NextRequest) {
 
     // Get payment from database
     const paymentResult = await query<PendingPayment>(
-      "SELECT * FROM ton_payments WHERE id = $1",
+      "SELECT * FROM ton_payments WHERE id = ?",
       [paymentId]
     )
     
@@ -265,9 +264,9 @@ export async function PUT(request: NextRequest) {
     // Mark payment as confirmed
     await query(
       `UPDATE ton_payments 
-       SET status = 'confirmed', confirmed_at = NOW(), tx_hash = $2 
-       WHERE id = $1`,
-      [paymentId, txHash]
+       SET status = 'confirmed', confirmed_at = datetime('now'), tx_hash = ? 
+       WHERE id = ?`,
+      [txHash, paymentId]
     )
 
     console.log(`TON Payment confirmed: ${paymentId} - ${payment.rub_amount} RUB for user ${payment.telegram_id}`)
