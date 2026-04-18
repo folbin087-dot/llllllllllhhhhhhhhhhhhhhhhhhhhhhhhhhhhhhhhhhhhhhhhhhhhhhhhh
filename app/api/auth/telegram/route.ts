@@ -120,9 +120,11 @@ export async function POST(request: NextRequest) {
     
     // Check if user exists
     let user = await getUserByTelegramId(telegramId)
+    let isNewUser = false
     
     if (!user) {
       // Create new user with 0 balance
+      isNewUser = true
       try {
         user = await createUser({
           telegram_id: telegramId,
@@ -142,6 +144,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Update last activity and user info
+      isNewUser = false
       try {
         await query(
           `UPDATE users 
@@ -190,7 +193,7 @@ export async function POST(request: NextRequest) {
         is_partner: isPartner,
         created_at: user.created_at,
       },
-      isNewUser: !user,
+      isNewUser,
     })
     
   } catch (error) {

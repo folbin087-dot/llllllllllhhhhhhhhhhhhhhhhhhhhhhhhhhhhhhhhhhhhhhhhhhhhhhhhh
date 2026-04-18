@@ -156,7 +156,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   // Get active referrals (active in last 7 days)
   const activeResult = await query<{ count: string }>(
     `SELECT COUNT(*) as count FROM users 
-     WHERE referred_by = $1 AND last_activity > NOW() - INTERVAL '7 days'`,
+     WHERE referred_by = $1 AND last_activity > datetime('now', '-7 days')`,
     [userId]
   )
   
@@ -190,7 +190,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const weekResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND created_at > NOW() - INTERVAL '7 days'`,
+     WHERE partner_id = $1 AND created_at > datetime('now', '-7 days')`,
     [userId]
   )
   
@@ -198,7 +198,7 @@ async function getReferralStats(userId: string, isPremium: boolean): Promise<Ref
   const monthResult = await query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) as total 
      FROM partner_earnings 
-     WHERE partner_id = $1 AND created_at > NOW() - INTERVAL '30 days'`,
+     WHERE partner_id = $1 AND created_at > datetime('now', '-30 days')`,
     [userId]
   )
   
@@ -262,7 +262,7 @@ async function getDailyStats(userId: string): Promise<DailyStats[]> {
        COALESCE(SUM(u.total_wagered - u.total_won), 0) as losses
      FROM users u
      WHERE u.referred_by = $1 
-       AND u.created_at > NOW() - INTERVAL '30 days'
+       AND u.created_at > datetime('now', '-30 days')
      GROUP BY DATE(u.created_at)
      ORDER BY date DESC`,
     [userId]
@@ -285,14 +285,14 @@ async function getWeeklyStats(userId: string) {
     losses: string
   }>(
     `SELECT 
-       DATE_TRUNC('week', u.created_at) as week,
+       DATE(u.created_at, 'start of week') as week,
        COUNT(*) as new_refs,
        COALESCE(SUM(u.total_wagered), 0) as wagered,
        COALESCE(SUM(u.total_wagered - u.total_won), 0) as losses
      FROM users u
      WHERE u.referred_by = $1 
-       AND u.created_at > NOW() - INTERVAL '12 weeks'
-     GROUP BY DATE_TRUNC('week', u.created_at)
+       AND u.created_at > datetime('now', '-12 weeks')
+     GROUP BY DATE(u.created_at, 'start of week')
      ORDER BY week DESC`,
     [userId]
   )
